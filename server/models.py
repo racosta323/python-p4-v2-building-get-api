@@ -2,6 +2,7 @@
 
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import MetaData
+#helps create JSON reponses (serializes the model)
 from sqlalchemy_serializer import SerializerMixin
 from sqlalchemy.ext.associationproxy import association_proxy
 
@@ -14,8 +15,12 @@ metadata = MetaData(
 db = SQLAlchemy(metadata=metadata)
 
 
-class Game(db.Model):
+class Game(db.Model, SerializerMixin):
     __tablename__ = "games"
+
+    #adds exceptions to what's being serialized (create a JSON response)
+    #except from the many table to avoid recursion
+    serialize_rules = ("-reviews.game",)
 
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String, unique=True)
@@ -25,14 +30,21 @@ class Game(db.Model):
     created_at = db.Column(db.DateTime, server_default=db.func.now())
     updated_at = db.Column(db.DateTime, onupdate=db.func.now())
 
+    #relationship with reviews
     reviews = db.relationship("Review", back_populates="game")
+
+    #association proxy - get users for game through reviews relationship
+    users = association_proxy('reviews', 'user', creator=lambda user_obj: Review(user = user_obj))
 
     def __repr__(self):
         return f"<Game {self.title} for {self.platform}>"
 
 
-class Review(db.Model):
+class Review(db.Model, SerializerMixin):
     __tablename__ = "reviews"
+
+    #excepts from the ones to avoid recursion
+    serialize_rules = ('-game.reviews', '-user.reviews',)
 
     id = db.Column(db.Integer, primary_key=True)
     score = db.Column(db.Integer)
@@ -50,8 +62,11 @@ class Review(db.Model):
         return f"<Review ({self.id}) of {self.game}: {self.score}/10>"
 
 
-class User(db.Model):
+class User(db.Model, SerializerMixin):
     __tablename__ = "users"
+
+    #don't forget to add commas at the end since this is a tuple
+    serialize_rules = ('-reviews.user',)
 
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String)
